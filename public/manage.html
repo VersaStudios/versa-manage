@@ -286,15 +286,8 @@
       <!-- Projects & People -->
       <h2 class="section-title" style="margin-top:28px">
         Projects &amp; People
-        <span style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:14px;color:#888;font-weight:normal">Click to expand</span>
-          <label id="csvLabel" style="padding:8px 16px;background:#1a1a1a;color:white;border-radius:8px;font-size:13px;cursor:pointer;font-weight:bold;">
-            ↑ Import CSV
-            <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="handleCSV(event)">
-          </label>
-        </span>
+        <span style="font-size:14px;color:#888;font-weight:normal">Click to expand</span>
       </h2>
-      <div id="csvStatus" style="font-size:13px;color:#888;margin-bottom:12px;min-height:1.2em;"></div>
 
       <div class="add-row">
         <input id="newProjectName" type="text" placeholder="New project name…" autocomplete="off">
@@ -430,6 +423,15 @@
               <button class="add-person-btn" onclick="addPerson('${proj.id}', false)">Add</button>
             </div>
             <div class="add-person-status" id="addStatus-${proj.id}"></div>
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e8e8e8;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span style="font-size:12px;color:#aaa;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;">Import CSV</span>
+              <label style="padding:7px 14px;background:#f0f0f0;color:#1a1a1a;border-radius:8px;font-size:13px;cursor:pointer;font-weight:bold;">
+                ↑ Choose file
+                <input type="file" accept=".csv" style="display:none" onchange="handleCSV(event,'${proj.id}')">
+              </label>
+              <span style="font-size:12px;color:#bbb;">Name, Job Title</span>
+              <div id="csvStatus-${proj.id}" style="font-size:12px;min-height:1.2em;width:100%;"></div>
+            </div>
           </div>`;
 
         card.innerHTML = `
@@ -666,61 +668,48 @@
         } catch(e) { document.getElementById('editError').textContent = 'Could not save changes.'; }
       }
 
-      // ── CSV Import ──
-      async function handleCSV(event) {
+      // ── CSV Import (per project) ──
+      async function handleCSV(event, projectId) {
         const file = event.target.files[0];
         if (!file) return;
-        const status = document.getElementById('csvStatus');
+        const status = document.getElementById('csvStatus-' + projectId);
         status.style.color = '#888';
         status.textContent = 'Reading file...';
 
         const text = await file.text();
         const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) { status.textContent = 'CSV must have a header row and at least one data row.'; status.style.color = '#c00'; return; }
+        if (lines.length < 2) { status.textContent = 'CSV needs a header row and at least one person.'; status.style.color = '#c00'; return; }
 
-        // Parse header
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g,''));
         const nameIdx = headers.findIndex(h => h.includes('name'));
         const jobIdx  = headers.findIndex(h => h.includes('job') || h.includes('title') || h.includes('role'));
-        const projIdx = headers.findIndex(h => h.includes('project') || h.includes('team'));
 
         if (nameIdx === -1) { status.textContent = 'CSV must have a "Name" column.'; status.style.color = '#c00'; return; }
-        if (projIdx === -1) { status.textContent = 'CSV must have a "Project" column.'; status.style.color = '#c00'; return; }
 
         const rows = lines.slice(1).map(line => {
           const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g,''));
-          return {
-            name: cols[nameIdx] || '',
-            jobTitle: jobIdx >= 0 ? (cols[jobIdx] || '') : '',
-            projectName: cols[projIdx] || ''
-          };
-        }).filter(r => r.name && r.projectName);
+          return { name: cols[nameIdx] || '', jobTitle: jobIdx >= 0 ? (cols[jobIdx] || '') : '' };
+        }).filter(r => r.name);
 
-        if (rows.length === 0) { status.textContent = 'No valid rows found in CSV.'; status.style.color = '#c00'; return; }
+        if (rows.length === 0) { status.textContent = 'No valid rows found.'; status.style.color = '#c00'; return; }
 
-        status.textContent = `Importing ${rows.length} people...`;
-        let added = 0, skipped = 0, errors = 0;
+        status.textContent = 'Importing ' + rows.length + ' people...';
+        let added = 0, errors = 0;
 
         for (const row of rows) {
-          // Find matching project (case-insensitive)
-          const proj = peopleData && peopleData.projects.find(p =>
-            p.name.toLowerCase() === row.projectName.toLowerCase()
-          );
-          if (!proj) { skipped++; continue; }
-
           try {
             const res = await fetch('/api/people', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: row.name, jobTitle: row.jobTitle, projectId: proj.id })
+              body: JSON.stringify({ name: row.name, jobTitle: row.jobTitle, projectId })
             });
             if (res.ok) added++;
-            else skipped++;
+            else errors++;
           } catch(e) { errors++; }
         }
 
         status.style.color = errors > 0 ? '#c00' : '#4CAF50';
-        status.textContent = `Done — ${added} added, ${skipped} skipped (unknown project or duplicate), ${errors} errors.`;
-        document.getElementById('csvInput').value = '';
+        status.textContent = added + ' added' + (errors > 0 ? ', ' + errors + ' failed' : '') + '.';
+        event.target.value = '';
         await loadPeople();
       }
     </script>
