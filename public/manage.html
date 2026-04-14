@@ -694,21 +694,18 @@
         if (rows.length === 0) { status.textContent = 'No valid rows found.'; status.style.color = '#c00'; return; }
 
         status.textContent = 'Importing ' + rows.length + ' people...';
-        let added = 0, errors = 0;
-
-        for (const row of rows) {
-          try {
-            const res = await fetch('/api/people', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: row.name, jobTitle: row.jobTitle, projectId })
-            });
-            if (res.ok) added++;
-            else errors++;
-          } catch(e) { errors++; }
+        try {
+          const res = await fetch('/api/people/bulk', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ people: rows, projectId })
+          });
+          const data = await res.json();
+          if (!res.ok) { status.style.color = '#c00'; status.textContent = data.error || 'Import failed.'; return; }
+          status.style.color = '#4CAF50';
+          status.textContent = data.added + ' people imported successfully.';
+        } catch(e) {
+          status.style.color = '#c00'; status.textContent = 'Could not reach server.';
         }
-
-        status.style.color = errors > 0 ? '#c00' : '#4CAF50';
-        status.textContent = added + ' added' + (errors > 0 ? ', ' + errors + ' failed' : '') + '.';
         event.target.value = '';
         await loadPeople();
       }
