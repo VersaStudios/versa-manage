@@ -680,7 +680,7 @@
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         if (lines.length < 2) { status.textContent = 'CSV needs a header row and at least one person.'; status.style.color = '#c00'; return; }
 
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g,''));
+        const headers = lines[0].replace(/^\uFEFF/, '').split(',').map(h => h.trim().toLowerCase().replace(/['"]/g,''));
         const nameIdx = headers.findIndex(h => h.includes('name'));
         const jobIdx  = headers.findIndex(h => h.includes('job') || h.includes('title') || h.includes('role'));
 
@@ -689,7 +689,7 @@
         const rows = lines.slice(1).map(line => {
           const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g,''));
           return { name: cols[nameIdx] || '', jobTitle: jobIdx >= 0 ? (cols[jobIdx] || '') : '' };
-        }).filter(r => r.name);
+        }).filter(r => r.name && r.name.trim());
 
         if (rows.length === 0) { status.textContent = 'No valid rows found.'; status.style.color = '#c00'; return; }
 
