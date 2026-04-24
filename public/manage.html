@@ -224,6 +224,14 @@
       }
 
       /* ── Safe edge padding ── */
+
+      /* ── Site toggle ── */
+      #siteToggle { display: flex; gap: 0; margin-bottom: 24px; border-radius: 12px; overflow: hidden; border: 2px solid #1a1a1a; }
+      .site-btn { flex: 1; padding: 14px 0; font-size: 16px; font-weight: bold; font-family: inherit;
+        cursor: pointer; border: none; background: white; color: #1a1a1a; text-transform: uppercase;
+        letter-spacing: 0.06em; transition: background 0.15s, color 0.15s; -webkit-tap-highlight-color: transparent; }
+      .site-btn.active { background: #1a1a1a; color: white; }
+      .site-btn:not(.active):active { background: #f0f0f0; }
       body { padding-left: max(24px, env(safe-area-inset-left));
              padding-right: max(24px, env(safe-area-inset-right)); }
 
@@ -270,6 +278,12 @@
     <!-- Manage panel -->
     <div id="managePanel">
 
+      <!-- Site toggle -->
+      <div id="siteToggle">
+        <button class="site-btn active" id="btnManchester" onclick="switchSite('manchester')">Manchester</button>
+        <button class="site-btn" id="btnLondon" onclick="switchSite('london')">London</button>
+      </div>
+
       <!-- Notice section -->
       <h2 class="section-title">Home Screen Notice</h2>
       <div class="notice-wrap">
@@ -313,6 +327,24 @@
       const ACCESS_CODE = '1956';
       let peopleData = null;
 
+      // ── Site toggle ──
+      const SITE_URLS = {
+        manchester: 'https://a-manchester-production.up.railway.app',
+        london: 'https://versa-london-production.up.railway.app'
+      };
+      let currentSite = 'manchester';
+      let apiBase = SITE_URLS.manchester;
+
+      function switchSite(site) {
+        currentSite = site;
+        apiBase = SITE_URLS[site];
+        document.getElementById('btnManchester').className = 'site-btn' + (site === 'manchester' ? ' active' : '');
+        document.getElementById('btnLondon').className = 'site-btn' + (site === 'london' ? ' active' : '');
+        peopleData = null;
+        loadPeople();
+        loadNotice();
+      }
+
       let kpValue = '';
       function kpPress(digit) {
         if (kpValue.length >= 6) return;
@@ -345,7 +377,7 @@
       // ── Load & render ──
       async function loadPeople() {
         try {
-          const res = await fetch('/api/people');
+          const res = await fetch(apiBase + '/api/people');
           peopleData = await res.json();
           renderProjects();
         } catch (e) { setStatus('Could not load data.'); }
@@ -423,15 +455,6 @@
               <button class="add-person-btn" onclick="addPerson('${proj.id}', false)">Add</button>
             </div>
             <div class="add-person-status" id="addStatus-${proj.id}"></div>
-            <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e8e8e8;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <span style="font-size:12px;color:#aaa;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;">Import CSV</span>
-              <label style="padding:7px 14px;background:#f0f0f0;color:#1a1a1a;border-radius:8px;font-size:13px;cursor:pointer;font-weight:bold;">
-                ↑ Choose file
-                <input type="file" accept=".csv" style="display:none" onchange="handleCSV(event,'${proj.id}')">
-              </label>
-              <span style="font-size:12px;color:#bbb;">Name, Job Title</span>
-              <div id="csvStatus-${proj.id}" style="font-size:12px;min-height:1.2em;width:100%;"></div>
-            </div>
           </div>`;
 
         card.innerHTML = `
@@ -476,7 +499,7 @@
         if (!name) { statusEl.textContent = 'Please enter a name.'; statusEl.style.color = '#c00'; return; }
 
         try {
-          const res = await fetch('/api/people', {
+          const res = await fetch(apiBase + '/api/people', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, jobTitle, company, projectId })
           });
@@ -501,7 +524,7 @@
         const name = nameInput.value.trim();
         if (!name) { setStatus('Enter a project name.'); return; }
         try {
-          const res = await fetch('/api/projects', {
+          const res = await fetch(apiBase + '/api/projects', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
           });
@@ -526,7 +549,7 @@
           : `Delete project "${projectName}"?`;
         if (!confirm(msg)) return;
         try {
-          const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+          const res = await fetch(apiBase + `/api/projects/${projectId}`, { method: 'DELETE' });
           if (!res.ok) { setStatus('Could not delete project.'); return; }
           setStatus(''); await loadPeople();
         } catch (e) { setStatus('Could not reach server.'); }
@@ -536,7 +559,7 @@
       async function deletePerson(personId, personName) {
         if (!confirm(`Remove ${personName} from the database?`)) return;
         try {
-          const res = await fetch(`/api/people/${personId}`, { method: 'DELETE' });
+          const res = await fetch(apiBase + `/api/people/${personId}`, { method: 'DELETE' });
           if (!res.ok) { setStatus('Could not delete person.'); return; }
           setStatus(''); await loadPeople();
         } catch (e) { setStatus('Could not reach server.'); }
@@ -546,7 +569,7 @@
       async function toggleSuspend(e, projectId) {
         e.stopPropagation();
         try {
-          await fetch(`/api/projects/${projectId}/suspend`, { method: 'PUT' });
+          await fetch(apiBase + `/api/projects/${projectId}/suspend`, { method: 'PUT' });
           loadPeople();
         } catch (e) { setStatus('Could not update project.'); }
       }
@@ -554,7 +577,7 @@
       // ── Notice ──
       async function loadNotice() {
         try {
-          const res = await fetch('/api/notice');
+          const res = await fetch(apiBase + '/api/notice');
           const data = await res.json();
           document.getElementById('noticeInput').value = data.text || '';
         } catch (e) {}
@@ -564,7 +587,7 @@
         const text = document.getElementById('noticeInput').value.trim();
         const status = document.getElementById('noticeStatus');
         try {
-          await fetch('/api/notice', {
+          await fetch(apiBase + '/api/notice', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text })
           });
@@ -601,7 +624,7 @@
           nfcReader.onreading = async (event) => {
             const nfcId = event.serialNumber;
             if (!nfcId || !assigningPersonId) return;
-            const res = await fetch(`/api/people/${assigningPersonId}/nfc`, {
+            const res = await fetch(apiBase + `/api/people/${assigningPersonId}/nfc`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ nfcId })
             });
@@ -623,7 +646,7 @@
 
       async function removeCard(personId, personName) {
         if (!confirm(`Remove NFC card from ${personName}?`)) return;
-        await fetch(`/api/people/${personId}/nfc`, { method: 'DELETE' });
+        await fetch(apiBase + `/api/people/${personId}/nfc`, { method: 'DELETE' });
         loadPeople();
       }
 
@@ -657,57 +680,15 @@
         var jobTitle = document.getElementById('editJobTitle').value.trim();
         if (!name) { document.getElementById('editError').textContent = 'Name is required.'; return; }
         try {
-          var r = await fetch('/api/people/' + id, {
+          var r = await fetch(apiBase + '/api/people/' + id, {
             method: 'PUT', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ name, jobTitle })
           });
           var data = await r.json();
           if (data.error) { document.getElementById('editError').textContent = data.error; return; }
           closeEditModal();
-          loadPeople();
+          loadData();
         } catch(e) { document.getElementById('editError').textContent = 'Could not save changes.'; }
-      }
-
-      // ── CSV Import (per project) ──
-      async function handleCSV(event, projectId) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const status = document.getElementById('csvStatus-' + projectId);
-        status.style.color = '#888';
-        status.textContent = 'Reading file...';
-
-        const text = await file.text();
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) { status.textContent = 'CSV needs a header row and at least one person.'; status.style.color = '#c00'; return; }
-
-        const headers = lines[0].replace(/^\uFEFF/, '').split(',').map(h => h.trim().toLowerCase().replace(/['"]/g,''));
-        const nameIdx = headers.findIndex(h => h.includes('name'));
-        const jobIdx  = headers.findIndex(h => h.includes('job') || h.includes('title') || h.includes('role'));
-
-        if (nameIdx === -1) { status.textContent = 'CSV must have a "Name" column.'; status.style.color = '#c00'; return; }
-
-        const rows = lines.slice(1).map(line => {
-          const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g,''));
-          return { name: cols[nameIdx] || '', jobTitle: jobIdx >= 0 ? (cols[jobIdx] || '') : '' };
-        }).filter(r => r.name && r.name.trim());
-
-        if (rows.length === 0) { status.textContent = 'No valid rows found.'; status.style.color = '#c00'; return; }
-
-        status.textContent = 'Importing ' + rows.length + ' people...';
-        try {
-          const res = await fetch('/api/people/bulk', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ people: rows, projectId })
-          });
-          const data = await res.json();
-          if (!res.ok) { status.style.color = '#c00'; status.textContent = data.error || 'Import failed.'; return; }
-          status.style.color = '#4CAF50';
-          status.textContent = data.added + ' people imported successfully.';
-        } catch(e) {
-          status.style.color = '#c00'; status.textContent = 'Could not reach server.';
-        }
-        event.target.value = '';
-        await loadPeople();
       }
     </script>
   
